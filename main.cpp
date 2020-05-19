@@ -3,6 +3,7 @@
 #include "library/enumerator.hpp"
 #include "library/summation.hpp"
 #include "library/seqinfileenumerator.hpp"
+#include "library/stringstreamenumerator.hpp"
 
 // Struct Declarations
 struct Trait;
@@ -16,7 +17,7 @@ std::istream& operator>>(std::istream& is, Task& t);
 
 // Infiles
 const char* studentsInfile = "students2.txt";
-const char* tasksInfile   = "tasks1.txt"; 
+const char* tasksInfile   = "tasks2.txt"; 
 
 // Osszefuzi a stringeket amig nem talal szamot
 class StringUntilNumSum : public Summation<std::string>
@@ -25,7 +26,7 @@ using Item = std::string;
 using Value = Item;
 
 public:
-            Item getCurrentItem() const { return _enor->current(); }
+            Item getCurrentItem() const { return _enor->current(); } // Ebben adjuk vissza az id-t
 
 protected:
             void first() override { }
@@ -38,7 +39,7 @@ protected:
                      std::stoi(current);
                      return false;
                 }
-                catch(std::exception& e)
+                catch(std::exception&)
                 {
                     return true;
                 }
@@ -68,21 +69,32 @@ struct Student
 };
 std::istream& operator>>(std::istream& is, Student& st)
 {
+    // READ LINE
+    std::string line;
+    std::getline(is,line);
+    std::stringstream ss(line);
+
+
     // SKIP NAME
     StringUntilNumSum readName;
-    SeqInFileEnumerator<std::string> reader(studentsInfile);
+    StringStreamEnumerator<std::string> reader(ss);
     reader.first();
     readName.addEnumerator(&reader);
     readName.run();
 
     // READ ID
-    st.id = std::stoi(readName.getCurrentItem());
+    try{
+            st.id = std::stoi(readName.getCurrentItem());
+    }
+    catch(std::exception&)
+    {
+            return is;
+    }
 
     // READ TRAIT
     StringUntilNumSum readTrait;
     readTrait.addEnumerator(&reader);
     reader.next();
-    std::cout << "FASSZ: " << reader.current() << std::endl;
     readTrait.run();
     st.trait.t_name = readTrait.result();
     
@@ -101,14 +113,34 @@ struct Task
 };
 std::istream& operator>>(std::istream& is, Task& t)
 {
-    is >> t.s_id >> t.time;
+    // Read Line
+    std::string line;
+    std::getline(is,line);
+    std::stringstream ss(line);
+    ss >> t.s_id;
+
+    // Skip name
+    StringUntilNumSum readName;
+    StringStreamEnumerator<std::string> reader(ss);
+    reader.first();
+    readName.addEnumerator(&reader);
+    readName.run();
+
+    // READ ID
+    try{
+            t.time = std::stoi(readName.getCurrentItem());
+    } catch(std::exception&) {
+            return is;
+    }
+
+
     return is;
 }
 
 // Osszesiti a diakok jegyeit
-class StudentMarkSum : public Summation<std::pair<int,double>,std::ostream>
+class StudentMarkSum : public Summation<std::pair<int,int>,std::ostream>
 {
-using Item = std::pair<int,double>;
+using Item = std::pair<int,int>;
 using Value = std::string;
 
 protected:
@@ -138,14 +170,14 @@ public:
 
 
 // A diakokaz es a hozza tartozo feladatokat sorolja fel szinkron
-class StudentMarkEnor : public Enumerator<std::pair<int,double>>
+class StudentMarkEnor : public Enumerator<std::pair<int,int>>
 {
 private:
 
          SeqInFileEnumerator<Student> students_;
          SeqInFileEnumerator<Task> tasks_;
          bool end_;
-         std::pair<int,double> current_;
+         std::pair<int,int> current_;
 
          int mapTimeToMark(double time) 
          {
@@ -169,28 +201,22 @@ public:
                 tSum.addEnumerator(&tasks_);
                 tSum.run();
                 double tSumVal = tSum.result() * students_.current().trait.mul;
-                current_ = std::pair<int,double>(students_.current().id, mapTimeToMark(tSumVal));
+                current_ = std::pair<int,int>(students_.current().id, mapTimeToMark(tSumVal));
 
                 // Iterate
                 students_.next();
             }
         }
-        std::pair<int,double> current() const override { return current_; }
+        std::pair<int,int> current() const override { return current_; }
         bool end() const override { return end_; }
 };
 
 int main()
 {
-    // StudentMarkEnor marx(studentsInfile,tasksInfile);
-    // StudentMarkSum sum(&std::cout);
-    // sum.addEnumerator(&marx);
-    // sum.run();
-
-    Student s;
-    std::ifstream ifs(studentsInfile);
-    ifs >> s;
-
-    std::cout << s.id << " " << s.trait.t_name << std::endl;
+    StudentMarkEnor marx(studentsInfile,tasksInfile);
+    StudentMarkSum sum(&std::cout);
+    sum.addEnumerator(&marx);
+    sum.run();
 
     return 0;
 }
