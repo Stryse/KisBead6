@@ -1,0 +1,4 @@
+100000 cheat
+100001 cheat
+100002 nocheat
+100003 lazy
